@@ -36,9 +36,12 @@ await beacon.notify({
 });
 ```
 
-Open questions to resolve before implementation starts:
+### Resolved
 
-- **Types-only vs. full client.** Ship just the payload types + topic name as a constant (producers bring their own Kafka client), or also own the producer connection lifecycle end-to-end? Leaning towards the latter given the explicit ask for an SDK, but worth confirming scope isn't creeping into "types package would have been enough."
+- **NestJS module, framework-agnostic core.** The SDK ships a NestJS module (`BeaconModule.forRootAsync({...})`), registered once and marked global, so any provider anywhere can `@Inject()` a `BeaconClient` without re-importing the module — matching how `nestjs-kit`'s own `MessagingModule`/`AuthClientModule` are consumed today. Internally, the actual Kafka-producer logic (connect, build the payload, publish) lives in a plain class with zero `@nestjs/*` imports; the NestJS module is a thin registration layer on top of it. This keeps today's DX idiomatic for NestJS producers (every known producer app is NestJS) without hard-locking out a future non-NestJS caller (a plain script, a Lambda) from using the same core class directly.
+
+Open questions still to resolve before implementation starts:
+
 - **Kafka client dependency.** Wrap `kafkajs` directly, or depend on `@sisques-labs/nestjs-kit`'s messaging primitives (today outbound-only — see [nestjs-kit#170](https://github.com/sisques-labs/nestjs-kit/issues/170) for the inbound-consumer counterpart discussion)?
 - **Schema versioning.** How does this package stay in lockstep with Beacon's ingestion contract as it evolves (new channels, new fields)? Needs a deliberate versioning/compatibility policy, not just "bump when it breaks."
 - **No deliverable-address field.** By design, the payload never carries a destination address (email/push-token/Discord ID) — Beacon resolves the Discord destination from its own server-side config, deliberately, to avoid an SSRF vector on an unauthenticated ingestion topic. The SDK's types should make this omission obvious, not just silently absent.
